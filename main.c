@@ -6,7 +6,25 @@
 int regFile[33];
 char mem[2048][sizeof(char)*33];
 bool bnef = false;
+bool fetched = false;
+bool decoded = false;
+bool executed = false;
+bool memoried = false;
+bool flush = false;
 int numberofinstructions = 0;
+
+char* onescomplement(char* stringtobeconverted,char* stringtoberturned){
+  strcpy(stringtoberturned,stringtobeconverted);
+  int i=0;
+  while(stringtobeconverted[i] != '\0'){
+    if(stringtobeconverted[i] == '1'){
+      stringtoberturned[i] = '0';
+    }else{
+      stringtoberturned[i] = '1';
+    }
+    i++;
+  }
+}
 
 char* toBinaryString(int n,int numberofbits) {
   int num_bits = numberofbits;
@@ -150,7 +168,11 @@ void FetchInstruction(char* ins){
     int pc = regFile[32];
     //printf("%i \n",pc);
     strcpy(ins,mem[pc]);
+    if(flush){
+      strcpy(ins,"00000000000000000000000000000000");
+    }
     regFile[32] += 1;
+    
 }
  void DecodeInstruction(char* ins,long* decoded){
     char operation[sizeof(char)*5];
@@ -159,6 +181,7 @@ void FetchInstruction(char* ins){
     char op3[sizeof(char)*6];
     char shamt[sizeof(char)*14];
     char immediate[sizeof(char)*19];
+    char immediaten[sizeof(char)*19];
     char address[sizeof(char)*29];
     operation[4] = '\0';
     op1[5] = '\0';
@@ -166,6 +189,7 @@ void FetchInstruction(char* ins){
     op3[5] = '\0';
     shamt[13] = '\0';
     immediate[18] = '\0';
+    immediaten[18] = '\0';
     address[28] = '\0';
     //char shamt[sizeof(char)*4];
     strncpy(operation,ins,4);
@@ -176,12 +200,18 @@ void FetchInstruction(char* ins){
     strncpy(immediate,ins+14,18);
     strncpy(address,ins+4,28);
     char *endptr;
+    long int intimmediate;
     long int intoperation = strtol(operation, &endptr, 2);
     long int intop1 = strtol(op1, &endptr, 2);
     long int intop2 = strtol(op2, &endptr, 2);
     long int intop3 = strtol(op3, &endptr, 2);
     long int intshamt = strtol(shamt, &endptr, 2);
-    long int intimmediate = strtol(immediate, &endptr, 2);
+    if(immediate[0] == '1'){
+      onescomplement(immediate,immediaten);
+      intimmediate = -(strtol(immediaten, &endptr, 2))-1;
+    }else{
+     intimmediate = strtol(immediate, &endptr, 2);
+    }
     long int intadress = strtol(address, &endptr, 2);
     decoded[0] = intoperation;
     if(decoded[0] == 4){
@@ -194,29 +224,53 @@ void FetchInstruction(char* ins){
     decoded[4] = intshamt;
     decoded[5] = intimmediate;
     decoded[6] = intadress;
+    if(flush){
+      for(int f=0;f<7;f++){
+        decoded[f] = 0;
+      }
+      intop1 = 0;
+    }
+    printf("decoded fields: \n");
+    printf("opcode: %i, operand 1: R%i, operand 2: R%i, operand 3: R%i, shift: %i, immediate: %i, address: %i\n",decoded[0],intop1,intop2,intop3,decoded[4],decoded[5],decoded[6]);
+    
 
  }
-long ExecuteInstruction(long decodedins[]){
+void JandBranchexecute(int finalresult){
+  regFile[32] = finalresult;
+  flush = false;
+}
+long ExecuteInstruction(long decodedins[],int PC){
   long finalresult;
+  printf("execution parameters and final result: \n");
   if(decodedins[0] == 0){
     finalresult = decodedins[2] + decodedins[3];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, operand 3 value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[3],finalresult);
   }else if(decodedins[0] == 1){
     finalresult = decodedins[2] - decodedins[3];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, operand 3 value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[3],finalresult);
   }else if(decodedins[0] == 2){
     finalresult = decodedins[2] * decodedins[5];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, immediate value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
   }else if(decodedins[0] == 3 || decodedins[0] == 10 || decodedins[0] == 11){
     finalresult = decodedins[2] + decodedins[5];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, immediate value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
   }else if(decodedins[0] == 4){
     if(decodedins[1] != decodedins[2]){
-      finalresult = regFile[32] + decodedins[5];
-      bnef = false;
+      finalresult = PC + 1 + decodedins[5];
+      //regFile[32] = finalresult;
+      printf("address = %i \n",finalresult);
+      flush = true;
+      printf("opcode: %i, operand 1 value: %i, operand 2 value: %i, immediate value: %i, branch to %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
     }else{
-      bnef = true;
+      printf("opcode: %i, operand 1 value: %i, operand 2 value: %i, immediate value: %i, no branching \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5]);
     }
   }else if(decodedins[0] == 5){
     finalresult = decodedins[2] & decodedins[5];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, immediate value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
   }else if(decodedins[0] == 6){
     finalresult = decodedins[2] | decodedins[5];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, immediate value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
+
   }else if(decodedins[0] == 7){
     char* adressimmediate = toBinaryString(decodedins[6],28);
     char* pcvalue = toBinaryString(regFile[32],32);
@@ -227,45 +281,154 @@ long ExecuteInstruction(long decodedins[]){
     snprintf(finalresultst, sizeof(char)*33, "%s%s", pcpart,adressimmediate);
     char* endptr;
     finalresult = strtol(finalresultst, &endptr, 2);
+    //regFile[32] = finalresult;
+    flush = true;
+    printf("opcode: %i, jump to address: %i \n",decodedins[0],finalresult);
+
 
   }else if(decodedins[0] == 8){
-    finalresult = decodedins[2] << decodedins[4];
+    unsigned int numbertobeshifted = decodedins[2];
+    finalresult = numbertobeshifted << decodedins[4];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, shift value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[4],finalresult);
+
   }else if(decodedins[0] == 9){
-    finalresult = decodedins[2] >> decodedins[4];
+    unsigned int numbertobeshifted = decodedins[2];
+    finalresult = numbertobeshifted >> decodedins[4];
+    printf("opcode: %i, operand 1 destination: R%i, operand 2 value: %i, shift value: %i, final result: %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[4],finalresult);
+
   }
   return finalresult;
 }
-void  Writeback(long decodedins[],long finalresult){
+void  Writeback(long decodedins[],long finalresult,int memdata){
   //printf("decoded = %i \n",decodedins[0]);
-  if((decodedins[0] == 4 && bnef == false) || decodedins[0] == 7){
-    regFile[32] = finalresult;
-    //printf("pc = %i \n",finalresult);
-  }else if(decodedins[0] != 4 && decodedins[0] != 7 && decodedins[0] != 10 && decodedins[0] != 11){
+  if(decodedins[0] != 4 && decodedins[0] != 7 && decodedins[0] != 11){
+  if(decodedins[1] == 0){
+    finalresult =0;
+  }if(decodedins[0] == 10){
+    finalresult = memdata;
+  }
   regFile[decodedins[1]] = finalresult;
+  printf("register changed : \n");
+  printf("R%i ====> %i \n",decodedins[1],finalresult);
     //printf("regnumber = %i \n",decodedins[1]);
   }
 }
-void Memory(long decodedins[],long finalresult){
+int Memory(long decodedins[],long finalresult){
+  int memdata =0;
   if(decodedins[0] == 10){
     char* endptr;
-    regFile[decodedins[1]] = strtol(mem[finalresult],&endptr,2) ;
+    memdata = strtol(mem[finalresult],&endptr,2);
+    printf("memory loaded value : %i \n",memdata);
   }else if(decodedins[0] == 11){
     char* binaryval = toBinaryString(regFile[decodedins[1]],32);
     strcpy(mem[finalresult],binaryval);
+    printf("Memory data changed : \n");
+    printf("Mem[%i] ====> %i \n",finalresult,regFile[decodedins[1]]);
   }
+  return memdata;
 }
 int main(){
 // regFile[33] = {{0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0},{10,0},{11,0},{12,0},{13,0},{14,0},{15,0},{16,0},{17,0},{18,0},{19,0},{20,0},{21,0},{22,0},{23,0},{24,0},{25,0},{26,0},{27,0},{28,0},{29,0},{30,0},{31,0},{32,0}}
 readInstructions();
-while(regFile[32]<numberofinstructions){
+int totalnumberofcycles = 7+((numberofinstructions-1)*2);
 char ins[sizeof(char)*33];
-FetchInstruction(ins);
 long decodedin[7];
-DecodeInstruction(ins,decodedin);
-long result = ExecuteInstruction(decodedin);
-Memory(decodedin,result);
-Writeback(decodedin,result);
+long currexec[7];
+long currmemwb[7];
+long finalresult;
+long currresult;
+int memdata = 0;
+int dco = 0;
+int eco = 0;
+int clkcycle = 1;
+int fetched = 0;
+int decoded = 0;
+int executed = 0;
+int memoried = 0;
+int writtenback = 0;
+int tobeexec = regFile[32];
+char currdec[sizeof(char)*33];
+bool readyfordecode = false;
+bool readyforexecute = false;
+bool finishedprogram = false;
+bool terminatecode = false;
+bool readyforMem = false;
+bool readyforWB = false;
+while(!terminatecode){
+  finishedprogram = strcmp(mem[regFile[32]],"") == 0;
+  printf("clock cycle: %i \n",clkcycle);
+    if(readyforWB){
+    writtenback = memoried;
+    printf("instruction %i in WriteBack \n",writtenback);
+    Writeback(currmemwb,currresult,memdata);
+    readyforWB = false;
+    if(writtenback == fetched){
+        terminatecode = true;
+    }
+    
+  }
+  if(readyforMem  && clkcycle %2 ==0){
+    for (int i = 0; i < 7; i++) { 
+        currmemwb[i] = currexec[i]; 
+    } 
+    currresult = finalresult;
+    memoried = executed;
+    printf("instruction %i in memory stage \n",memoried);
+    memdata = Memory(currmemwb,currresult);
+    readyforMem = false;
+    readyforWB = true;
+    
+  }
+  if(readyforexecute){
+    if(eco ==0){
+    for (int i = 0; i < 7; i++) { 
+        currexec[i] = decodedin[i]; 
+    } 
+    executed = decoded;
+    printf("executing instruction %i \n",executed);
+    }else{
+      printf("executed instruction %i:  \n",executed);
+      finalresult = ExecuteInstruction(currexec,executed-1);
+    }
+    eco++;
+    if(eco == 2){
+      eco =0;
+      readyforMem = true;
+      readyforexecute = false;
+    }
+    
+  }
+  if(readyfordecode){
+    if(dco ==0){
+    strcpy(currdec,ins);
+    decoded = fetched;
+    printf("decoding instruction %i \n",decoded);
+    }else{
+      printf("decoded instruction %i:  \n",decoded);
+      DecodeInstruction(currdec,decodedin);
+    }
+    dco++;
+    if(dco == 2){
+      dco =0;
+      readyforexecute = true;
+      readyfordecode = false;
+    }
+    
+  }
+  if(clkcycle %2 != 0 && !finishedprogram){
+  FetchInstruction(ins);
+  fetched = regFile[32];
+  printf("fetched instruction %i: %s \n",fetched,ins);
+  readyfordecode = true;
+  }
+  if(flush){
+    JandBranchexecute(finalresult);
+  }
+  clkcycle++;
+  printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \n");
 }
+printf("\n");
+printf("registers :\n");
 for(int i=0;i<33;i++){
   if(i == 32){
     printf("R%i (PC): %i \n",i,regFile[i]);
@@ -280,3 +443,11 @@ for(int i=0;i<33;i++){
 
 
 }
+
+// char ins[sizeof(char)*33];
+// FetchInstruction(ins);
+// long decodedin[7];
+// DecodeInstruction(ins,decodedin);
+// long result = ExecuteInstruction(decodedin);
+// Memory(decodedin,result);
+// Writeback(decodedin,result);
