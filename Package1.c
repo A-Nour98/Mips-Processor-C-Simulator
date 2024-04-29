@@ -258,7 +258,6 @@ long ExecuteInstruction(long decodedins[],int PC){
     if(decodedins[1] != decodedins[2]){
       finalresult = PC + 1 + decodedins[5];
       //regFile[32] = finalresult;
-      printf("address = %i \n",finalresult);
       flush = true;
       printf("opcode: %i, operand 1 value: %i, operand 2 value: %i, immediate value: %i, branch to %i \n",decodedins[0],decodedins[1],decodedins[2],decodedins[5],finalresult);
     }else{
@@ -330,7 +329,6 @@ int Memory(long decodedins[],long finalresult){
 int main(){
 // regFile[33] = {{0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0},{10,0},{11,0},{12,0},{13,0},{14,0},{15,0},{16,0},{17,0},{18,0},{19,0},{20,0},{21,0},{22,0},{23,0},{24,0},{25,0},{26,0},{27,0},{28,0},{29,0},{30,0},{31,0},{32,0}}
 readInstructions();
-int totalnumberofcycles = 7+((numberofinstructions-1)*2);
 char ins[sizeof(char)*33];
 long decodedin[7];
 long currexec[7];
@@ -431,7 +429,7 @@ printf("\n");
 printf("registers :\n");
 for(int i=0;i<33;i++){
   if(i == 32){
-    printf("R%i (PC): %i \n",i,regFile[i]);
+    printf("PC: %i \n",regFile[i]);
   }else{
     printf("R%i: %i \n",i,regFile[i]);
   }
