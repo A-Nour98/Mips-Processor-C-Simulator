@@ -1,2 +1,2 @@
 # Mips Simulator
-A Mips Processor Java simulator
+A Mips Processor C simulator
